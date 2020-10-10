@@ -1,0 +1,80 @@
+<html>
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@2/dist/socket.io.js"></script>
+    <script>
+      const { RTCPeerConnection, RTCSessionDescription } = window;
+      const peerConnection = new RTCPeerConnection();
+
+      const socket = io();
+      let isAlreadyCalling = false;
+
+      setLocalCam();
+
+      peerConnection.ontrack = function ({ streams: [stream] }) {
+        console.log('track');
+        const remoteVideo = document.getElementById('remote-video');
+        if (remoteVideo) {
+          remoteVideo.srcObject = stream;
+        }
+      };
+
+      async function setLocalCam() {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+
+        document.getElementById('local-video').srcObject = stream;
+
+        stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+      }
+
+      async function callUser(socketId) {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(new RTCSessionDescription(offer));
+
+        socket.emit('call-user', {
+          offer,
+          to: socketId,
+        });
+      }
+
+      socket.on('next-partner', id => {
+        callUser(id);
+      });
+
+      socket.on('call-made', async data => {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(new RTCSessionDescription(answer));
+
+        socket.emit('make-answer', {
+          answer,
+          to: data.socket,
+        });
+      });
+
+      socket.on('answer-made', async data => {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+
+        if (!isAlreadyCalling) {
+          callUser(data.socket);
+          isAlreadyCalling = true;
+        }
+      });
+
+      function ready() {
+        socket.emit('ready');
+      }
+    </script>
+    <style>
+      video {
+        border: black 1px solid;
+      }
+    </style>
+    <title>Ersti-Roulette</title>
+  </head>
+  <body>
+    <h1>Hello World</h1>
+    <button onclick="ready()">next</button>
+    <video autoplay id="remote-video"></video>
+    <video autoplay muted id="local-video"></video>
+  </body>
+</html>
