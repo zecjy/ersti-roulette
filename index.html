@@ -2,30 +2,41 @@
   <head>
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@2/dist/socket.io.js"></script>
     <script>
+      // lots taken from here: https://blog.logrocket.com/webrtc-over-websocket-in-node-js/
+
+      // initialize some stuff for WebRTC
       const { RTCPeerConnection, RTCSessionDescription } = window;
       const peerConnection = new RTCPeerConnection();
 
+      // initialize socket.io
       const socket = io();
+
+      // calling state
       let isAlreadyCalling = false;
 
+      // really messy here...
       setLocalCam();
+      async function setLocalCam() {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        document.getElementById('local-video').srcObject = stream;
+        stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+      }
 
-      peerConnection.ontrack = function ({ streams: [stream] }) {
-        console.log('track');
+      // when we receive the stream from the peerConnection, set it as video source
+      peerConnection.ontrack = ({ streams: [stream] }) => {
         const remoteVideo = document.getElementById('remote-video');
         if (remoteVideo) {
           remoteVideo.srcObject = stream;
         }
       };
 
-      async function setLocalCam() {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      // when the peerConnection is disconnected, send our ready state
+      peerConnection.onconnectionstatechange = () => {
+        console.log(peerConnection.connectionState);
+        if (peerConnection.connectionState == 'disconnected') ready();
+      };
 
-        document.getElementById('local-video').srcObject = stream;
-
-        stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
-      }
-
+      // call a user directly by its id
       async function callUser(socketId) {
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(new RTCSessionDescription(offer));
@@ -36,10 +47,13 @@
         });
       }
 
+      // we receive an id that we can call, yay
       socket.on('next-partner', id => {
         callUser(id);
       });
 
+      // WebRTC stuff idk pasted...
+      // so when someone is calling us,
       socket.on('call-made', async data => {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
         const answer = await peerConnection.createAnswer();
@@ -51,6 +65,7 @@
         });
       });
 
+      // ... yep
       socket.on('answer-made', async data => {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
 
@@ -60,7 +75,9 @@
         }
       });
 
+      // basically we are ready
       function ready() {
+        isAlreadyCalling = false;
         socket.emit('ready');
       }
     </script>
