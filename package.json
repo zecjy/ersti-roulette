@@ -4,11 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "debug": "nodemon --inspect server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon server.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Tamme",
   "license": "ISC",
   "dependencies": {
     "express": "^4.17.1",
