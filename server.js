@@ -23,6 +23,10 @@ class User {
      */
     this.id = id;
     /**
+     * display name, if not set its the same as the id
+     */
+    this.name = id;
+    /**
      * if the user is ready to begin a new call
      * @type {boolean}
      */
@@ -42,11 +46,19 @@ class User {
   }
 
   /**
+   * updates the name of the user
+   * @param {string} name displayname
+   */
+  setName(name) {
+    this.name = name;
+  }
+
+  /**
    * users that are available as partner right now
    * @returns {User[]}
    */
   getAvailablePartners() {
-    let available = [];
+    const available = [];
     users.forEach(user => {
       // some checks if the partner is free etc...
       if (user !== this && user.free && !this.lastSeen.includes(user)) {
@@ -76,11 +88,11 @@ app.get('/', (req, res) => {
 // Event is fired on each new socket connecting
 io.on('connection', socket => {
   // create new user object with corresponding id
-  let user = new User(socket.id);
+  const user = new User(socket.id);
 
   // user sends us that he is ready to start chatting
   socket.on('ready', () => {
-    let available = user.getAvailablePartners();
+    const available = user.getAvailablePartners();
 
     // check for potential partners, if not set this user to free state and emit waiting
     if (available.length === 0) {
@@ -88,9 +100,12 @@ io.on('connection', socket => {
       socket.emit('waiting');
     } else {
       // take available partner and begin connection process by sending the partner id to this user
-      let partner = available[0];
+      const partner = available[0];
       partner.free = false;
-      socket.emit('next-partner', partner.id);
+      socket.emit('next-partner', {
+        id: partner.id,
+        name: partner.name,
+      });
     }
   });
 
@@ -99,6 +114,7 @@ io.on('connection', socket => {
     socket.to(data.to).emit('call-made', {
       offer: data.offer,
       socket: socket.id,
+      name: user.name,
     });
   });
 
@@ -107,7 +123,13 @@ io.on('connection', socket => {
     socket.to(data.to).emit('answer-made', {
       answer: data.answer,
       socket: socket.id,
+      name: user.name,
     });
+  });
+
+  // updates the username
+  socket.on('name', name => {
+    user.setName(name);
   });
 
   // when the socket connection is closed we remove the associated user

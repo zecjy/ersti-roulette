@@ -48,8 +48,8 @@
       }
 
       // we receive an id that we can call, yay
-      socket.on('next-partner', id => {
-        callUser(id);
+      socket.on('next-partner', partner => {
+        callUser(partner.id);
       });
 
       // WebRTC stuff idk pasted...
@@ -80,6 +80,12 @@
         isAlreadyCalling = false;
         socket.emit('ready');
       }
+
+      // sends the new username
+      function updateName() {
+        const name = document.getElementById('input-name').value;
+        socket.emit('name', name);
+      }
     </script>
     <style>
       video {
@@ -91,6 +97,8 @@
   <body>
     <h1>Hello World</h1>
     <button onclick="ready()">next</button>
+    <input placeholder="Name" id="input-name" />
+    <button onclick="updateName()">Update Name</button>
     <video autoplay id="remote-video"></video>
     <video autoplay muted id="local-video"></video>
   </body>
