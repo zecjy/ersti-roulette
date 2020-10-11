@@ -1,73 +1,19 @@
 const fs = require('fs');
-const app = require('express')();
+const express = require('express');
+const https = require('https');
+const socketio = require('socket.io');
+const User = require('./User.js');
 
+const app = express();
 // https with good certificates? nginx?
-const https = require('https').createServer(
+const server = https.createServer(
   {
-    key: fs.readFileSync('server.key'),
-    cert: fs.readFileSync('server.cert'),
+    key: fs.readFileSync('certs/server.key'),
+    cert: fs.readFileSync('certs/server.cert'),
   },
   app
 );
-
-const io = require('socket.io')(https);
-
-/**
- * Class representing an active User, always refers to an active socket
- */
-class User {
-  constructor(id) {
-    /**
-     * id referring to an active socket
-     * @type {string}
-     */
-    this.id = id;
-    /**
-     * display name, if not set its the same as the id
-     */
-    this.name = id;
-    /**
-     * if the user is ready to begin a new call
-     * @type {boolean}
-     */
-    this.free = false;
-    /**
-     * x entries with ids that were last connected to prevent connection to the same user again
-     * @type {string[]}
-     */
-    this.lastSeen = [];
-    /**
-     * counts how many connections to each other user this user had
-     * @type {Object.<string, int>}
-     */
-    this.countPartners = {};
-    // push this new user to the users array
-    users.push(this);
-  }
-
-  /**
-   * updates the name of the user
-   * @param {string} name displayname
-   */
-  setName(name) {
-    this.name = name;
-  }
-
-  /**
-   * users that are available as partner right now
-   * @returns {User[]}
-   */
-  getAvailablePartners() {
-    const available = [];
-    users.forEach(user => {
-      // some checks if the partner is free etc...
-      if (user !== this && user.free && !this.lastSeen.includes(user)) {
-        available.push(user);
-      }
-    });
-    return available;
-  }
-}
+const io = socketio(server);
 
 /**
  * Array of the connected users
@@ -81,18 +27,17 @@ setInterval(() => {
 }, 2000);
 
 // Serving static index file at root path
-app.get('/', (req, res) => {
-  res.sendFile(`${__dirname}/index.html`);
-});
+app.use(express.static('public'));
 
 // Event is fired on each new socket connecting
 io.on('connection', socket => {
   // create new user object with corresponding id
   const user = new User(socket.id);
+  users.push(user);
 
   // user sends us that he is ready to start chatting
   socket.on('ready', () => {
-    const available = user.getAvailablePartners();
+    const available = getAvailablePartners(user);
 
     // check for potential partners, if not set this user to free state and emit waiting
     if (available.length === 0) {
@@ -159,7 +104,23 @@ function getUser(id) {
   return users.find(user => user.id === id);
 }
 
+/**
+ * users that are available as partner right now
+ * @param {User} user the user that we are looking for partners
+ * @returns {User[]}
+ */
+function getAvailablePartners(user) {
+  const available = [];
+  users.forEach(partner => {
+    // some checks if the partner is free etc...
+    if (user !== partner && partner.free && !user.lastSeen.includes(partner)) {
+      available.push(partner);
+    }
+  });
+  return available;
+}
+
 // start webserver
-https.listen(443, () => {
+server.listen(443, () => {
   console.log('Server running on port 443 localhost');
 });
