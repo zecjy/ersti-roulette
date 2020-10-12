@@ -2,7 +2,12 @@
  * Class representing an active User, always refers to an active socket
  */
 class User {
-  constructor(id) {
+  /**
+   * creates new user with id and name
+   * @param {string} id the socket id
+   * @param {string} name the display name
+   */
+  constructor(id, name) {
     /**
      * id referring to an active socket
      * @type {string}
@@ -11,7 +16,7 @@ class User {
     /**
      * display name, if not set its the same as the id
      */
-    this.name = id;
+    this.name = name;
     /**
      * if the user is ready to begin a new call
      * @type {boolean}

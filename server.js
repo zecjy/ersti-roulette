@@ -27,13 +27,26 @@ setInterval(() => {
 }, 2000);
 
 // Serving static index file at root path
-app.use(express.static('public'));
+app.use(
+  express.static('public', {
+    etag: false,
+  })
+);
 
 // Event is fired on each new socket connecting
 io.on('connection', socket => {
-  // create new user object with corresponding id
-  const user = new User(socket.id);
-  users.push(user);
+  let user = getUser(socket.id);
+  if (!user) {
+    // create new user object with corresponding id
+    user = new User(socket.id, socket.handshake.query.name);
+    users.push(user);
+  }
+
+  // send new user too all except current user
+  socket.broadcast.emit('new-user', user);
+
+  // send all users to current user
+  socket.emit('all-users', users);
 
   // user sends us that he is ready to start chatting
   socket.on('ready', () => {
@@ -43,10 +56,10 @@ io.on('connection', socket => {
     if (available.length === 0) {
       user.free = true;
       socket.emit('waiting');
+      io.emit('update-user', user);
     } else {
       // take available partner and begin connection process by sending the partner id to this user
       const partner = available[0];
-      partner.free = false;
       socket.emit('next-partner', {
         id: partner.id,
         name: partner.name,
@@ -65,6 +78,8 @@ io.on('connection', socket => {
 
   // user received a call and wants to answer so we forward the answer to the original caller
   socket.on('make-answer', data => {
+    user.free = false;
+    io.emit('update-user', user);
     socket.to(data.to).emit('answer-made', {
       answer: data.answer,
       socket: socket.id,
@@ -75,11 +90,13 @@ io.on('connection', socket => {
   // updates the username
   socket.on('name', name => {
     user.setName(name);
+    io.emit('update-user', user);
   });
 
   // when the socket connection is closed we remove the associated user
   socket.on('disconnect', reason => {
     deleteUser(socket.id);
+    socket.broadcast.emit('remove-user', user.id);
   });
 });
 
